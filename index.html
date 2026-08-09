@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Attendance Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      background: #0f172a;
+      color: white;
+      font-family: Arial;
+      text-align: center;
+      padding: 20px;
+    }
+
+    #reader {
+      max-width: 500px;
+      margin: auto;
+    }
+
+    #result {
+      margin: 20px;
+      font-size: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Attendance Scanner</h1>
+
+<p>Scan Student QR</p>
+
+<div id="reader"></div>
+
+<div id="result">
+  Waiting for camera...
+</div>
+
+<script>
+
+function success(decodedText) {
+
+  document.getElementById("result").innerHTML =
+    "QR FOUND: <b>" + decodedText + "</b>";
+
+}
+
+function failure(error) {
+  // ignore normal scanning errors
+}
+
+const scanner = new Html5QrcodeScanner(
+  "reader",
+  {
+    fps: 10,
+    qrbox: 250
+  }
+);
+
+scanner.render(success, failure);
+
+</script>
+
+</body>
+</html>
