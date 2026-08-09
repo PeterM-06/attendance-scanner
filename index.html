@@ -57,28 +57,35 @@ function show(t,c){const b=document.getElementById("result");b.className=c||"";b
 
 async function testConnection(){
   const diag = document.getElementById("diag");
-  diag.textContent = "⏳ جاري الاختبار...";
+  diag.textContent = "⏳ جاري الاختبار (خطوتين)...";
 
   const testUrl = WEB_APP_URL + "?action=scan&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN) + "&callback=diagCb";
 
+  let report = "";
+
+  /* اختبار 1: fetch عادي (متوقع يفشل بـ CORS، ده طبيعي ومش المشكلة) */
   try{
-    const res = await fetch(testUrl, {method:"GET"});
+    const res = await fetch(testUrl, {method:"GET", mode:"cors"});
     const text = await res.text();
-
-    diag.textContent =
-      "✅ وصل رد من السيرفر\n" +
-      "HTTP Status: " + res.status + "\n" +
-      "الرد: " + text.substring(0,300);
-
+    report += "✅ اختبار 1 (CORS): نجح\nHTTP: " + res.status + "\n\n";
   }catch(err){
-
-    diag.textContent =
-      "❌ فشل الطلب فعليًا (مش وصل للسيرفر خالص)\n" +
-      "تفاصيل الخطأ: " + (err && err.message ? err.message : String(err)) + "\n\n" +
-      "الرابط اللي بيتحاول الاتصال بيه:\n" + testUrl + "\n\n" +
-      "لو الخطأ فيه كلمة CORS: المشكلة في إعدادات الديبلوي.\n" +
-      "لو الخطأ 'Failed to fetch': يا إما مفيش نت، يا إما الرابط غلط.";
+    report += "ℹ️ اختبار 1 (CORS): فشل زي المتوقع (Google بيمنع قراءة الرد من دومين تاني، ده طبيعي مش عيب)\n\n";
   }
+
+  /* اختبار 2: fetch بوضع no-cors — بيبعت الطلب فعليًا حتى لو مش هنقدر نقرأ الرد.
+     لو ده فشل برضو، يبقى فيه حاجة حقيقية بتمنع وصول الطلب (adblocker / فايروول / DNS) */
+  try{
+    await fetch(testUrl, {method:"GET", mode:"no-cors"});
+    report += "✅ اختبار 2 (وصول الطلب فعليًا): نجح — يعني في الغالب الطلب بيوصل للسيرفر\n\n";
+    report += "لو السكان لسه بيفشل رغم كده، جرب صفحة السكانر في متصفح/جهاز تاني للتأكد.";
+  }catch(err){
+    report += "❌ اختبار 2 (وصول الطلب فعليًا): فشل\n";
+    report += "تفاصيل: " + (err && err.message ? err.message : String(err)) + "\n\n";
+    report += "ده بيأكد إن فيه حاجة في المتصفح/الجهاز/الشبكة بتمنع الوصول لـ script.google.com (أداة حجب إعلانات، فايروول، أو DNS بيفلتر الدومين).\n";
+    report += "جرب: نافذة متخفية، أو قفل أي إضافة حجب، أو شبكة نت تانية.";
+  }
+
+  diag.textContent = report;
 }
 
 function sendScan(id){
@@ -106,26 +113,59 @@ function sendScan(id){
 
   const src = WEB_APP_URL+"?action=scan&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&callback="+cb;
 
+  /* =========================
+     خطة احتياطية:
+     لو طريقة الـ <script> فشلت أو اتعلّقت،
+     نجرب نبعت نفس الطلب بـ fetch(no-cors).
+     ده بيبعت الطلب فعليًا للسيرفر (يسجل الحضور)
+     حتى لو مش هنقدر نقرا رد التأكيد.
+  ========================= */
+
+  function fallbackSend(reason){
+    if(settled) return;
+    settled = true;
+    delete window[cb];
+
+    fetch(src, {method:"GET", mode:"no-cors"})
+      .then(()=>{
+        beep("warn");vibrate(200);
+        show(
+          "📤 اتبعت الطلب (بطريقة احتياطية)<br>" +
+          "<b>"+esc(id)+"</b><br>" +
+          "<small>الوضع الطبيعي كان بيفشل ("+esc(reason)+")، لكن الطلب اتبعت. " +
+          "اتأكد من تقرير المحاضرة إن الطالب اتسجل.</small>",
+          "warn"
+        );
+      })
+      .catch(()=>{
+        beep("error");vibrate(400);
+        show(
+          "❌ فشل الاتصال بنظام الحضور نهائيًا<br>" +
+          "<small>جرب زرار 'اختبار الاتصال' تحت، أو جرب نافذة متخفية / اقفل أي أداة حجب إعلانات</small>",
+          "error"
+        );
+      })
+      .finally(()=>{
+        setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
+      });
+  }
+
   const s=document.createElement("script");s.id=cb;s.src=src;
 
   s.onerror=function(){
-    settled=true;
-    processing=false;
-    show("❌ فشل الاتصال بنظام الحضور<br><small>دوس زرار 'اختبار الاتصال' تحت عشان تعرف السبب</small>","error");
-    delete window[cb]; s.remove();
+    if(s.parentNode) s.remove();
+    fallbackSend("فشل تحميل السكريبت");
   };
 
   document.body.appendChild(s);
 
-  /* لو مفيش رد خالص (لا نجاح ولا فشل) خلال 15 ثانية */
+  /* لو مفيش رد خالص (لا نجاح ولا فشل) خلال 8 ثواني، نجرب الاحتياطي */
   setTimeout(()=>{
     if(!settled){
-      processing=false;
-      show("⏱️ انتهت مهلة الاتصال (15 ثانية) من غير رد<br><small>تأكد من الإنترنت، أو دوس 'اختبار الاتصال'</small>","error");
-      delete window[cb];
       if(s.parentNode) s.remove();
+      fallbackSend("انتهت المهلة من غير رد");
     }
-  },15000);
+  },8000);
 }
 function onScanSuccess(text){
   const id=String(text||"").trim(); if(!id||processing)return;
