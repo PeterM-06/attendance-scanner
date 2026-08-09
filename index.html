@@ -25,6 +25,8 @@ button{padding:10px 18px;border:0;border-radius:8px;margin:8px;background:#2563e
 <div id="reader"></div>
 <div id="result">في انتظار QR...</div>
 <div class="info">امسح أكواد الطلاب واحدًا وراء الآخر.</div>
+<button onclick="testConnection()">🔧 اختبار الاتصال</button>
+<div id="diag" style="text-align:right;font-size:13px;color:#94a3b8;margin-top:8px;white-space:pre-wrap;word-break:break-all"></div>
 </div>
 </div>
 <script>
@@ -46,9 +48,45 @@ function vibrate(ms){if(navigator.vibrate) navigator.vibrate(ms);}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
 function show(t,c){const b=document.getElementById("result");b.className=c||"";b.innerHTML=t;}
 
+/* =========================
+   اختبار الاتصال (تشخيص)
+   بيستخدم fetch عشان نقدر نشوف
+   الخطأ الحقيقي على الشاشة من غير
+   ما نفتح Developer Tools
+========================= */
+
+async function testConnection(){
+  const diag = document.getElementById("diag");
+  diag.textContent = "⏳ جاري الاختبار...";
+
+  const testUrl = WEB_APP_URL + "?action=scan&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN) + "&callback=diagCb";
+
+  try{
+    const res = await fetch(testUrl, {method:"GET"});
+    const text = await res.text();
+
+    diag.textContent =
+      "✅ وصل رد من السيرفر\n" +
+      "HTTP Status: " + res.status + "\n" +
+      "الرد: " + text.substring(0,300);
+
+  }catch(err){
+
+    diag.textContent =
+      "❌ فشل الطلب فعليًا (مش وصل للسيرفر خالص)\n" +
+      "تفاصيل الخطأ: " + (err && err.message ? err.message : String(err)) + "\n\n" +
+      "الرابط اللي بيتحاول الاتصال بيه:\n" + testUrl + "\n\n" +
+      "لو الخطأ فيه كلمة CORS: المشكلة في إعدادات الديبلوي.\n" +
+      "لو الخطأ 'Failed to fetch': يا إما مفيش نت، يا إما الرابط غلط.";
+  }
+}
+
 function sendScan(id){
   const cb="cb_"+Date.now();
+  let settled=false;
+
   window[cb]=function(data){
+    settled=true;
     if(data.status==="success"){
       beep("success");vibrate([100,60,100]);
       show("✅ تم تسجيل الحضور<br><b>"+esc(data.studentName||id)+"</b><br><small>"+esc(id)+"</small>","success");
@@ -65,10 +103,29 @@ function sendScan(id){
     delete window[cb]; const s=document.getElementById(cb); if(s)s.remove();
     setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1200);
   };
-  const s=document.createElement("script");s.id=cb;
-  s.src=WEB_APP_URL+"?action=scan&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&callback="+cb;
-  s.onerror=function(){processing=false;show("❌ فشل الاتصال بنظام الحضور","error");delete window[cb];s.remove();};
+
+  const src = WEB_APP_URL+"?action=scan&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&callback="+cb;
+
+  const s=document.createElement("script");s.id=cb;s.src=src;
+
+  s.onerror=function(){
+    settled=true;
+    processing=false;
+    show("❌ فشل الاتصال بنظام الحضور<br><small>دوس زرار 'اختبار الاتصال' تحت عشان تعرف السبب</small>","error");
+    delete window[cb]; s.remove();
+  };
+
   document.body.appendChild(s);
+
+  /* لو مفيش رد خالص (لا نجاح ولا فشل) خلال 15 ثانية */
+  setTimeout(()=>{
+    if(!settled){
+      processing=false;
+      show("⏱️ انتهت مهلة الاتصال (15 ثانية) من غير رد<br><small>تأكد من الإنترنت، أو دوس 'اختبار الاتصال'</small>","error");
+      delete window[cb];
+      if(s.parentNode) s.remove();
+    }
+  },15000);
 }
 function onScanSuccess(text){
   const id=String(text||"").trim(); if(!id||processing)return;
