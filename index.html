@@ -1,68 +1,617 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <title>Attendance Scanner</title>
 
+  <!-- QR Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    body {
-      background: #0f172a;
-      color: white;
-      font-family: Arial;
-      text-align: center;
-      padding: 20px;
+    * {
+      box-sizing: border-box;
     }
 
-    #reader {
-      max-width: 500px;
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #0f172a;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 550px;
       margin: auto;
     }
 
-    #result {
-      margin: 20px;
-      font-size: 20px;
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
     }
+
+    .subtitle {
+      font-size: 18px;
+      margin-bottom: 25px;
+      color: #cbd5e1;
+    }
+
+    .scanner-box {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 500px;
+      margin: auto;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    #reader video {
+      border-radius: 12px;
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      font-size: 20px;
+      min-height: 55px;
+      background: #172033;
+    }
+
+    .success {
+      background: #064e3b !important;
+      color: #6ee7b7;
+    }
+
+    .error {
+      background: #450a0a !important;
+      color: #fca5a5;
+    }
+
+    .loading {
+      background: #172554 !important;
+      color: #93c5fd;
+    }
+
+    .warning {
+      background: #451a03 !important;
+      color: #fcd34d;
+    }
+
+    .id {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    .name {
+      font-size: 26px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .info {
+      margin-top: 20px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 12px 25px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-size: 17px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
   </style>
 </head>
 
+
 <body>
 
-<h1>Attendance Scanner</h1>
+<div class="container">
 
-<p>Scan Student QR</p>
+  <h1>Attendance Scanner</h1>
 
-<div id="reader"></div>
+  <div class="subtitle">
+    Scan Student QR
+  </div>
 
-<div id="result">
-  Waiting for camera...
+
+  <div class="scanner-box">
+
+    <!-- QR Scanner -->
+    <div id="reader"></div>
+
+
+    <!-- Result -->
+    <div id="result">
+      Waiting for QR...
+    </div>
+
+
+    <div class="info">
+      Point the camera at the student's QR code.
+    </div>
+
+  </div>
+
 </div>
+
 
 <script>
 
-function success(decodedText) {
+  /*
+   * ==========================================
+   * GOOGLE APPS SCRIPT WEB APP
+   * ==========================================
+   */
 
-  document.getElementById("result").innerHTML =
-    "QR FOUND: <b>" + decodedText + "</b>";
+  const WEB_APP_URL =
+    "https://script.google.com/macros/s/AKfycbxchjrSC4Wl5-Q1noYdEdXr3L0yPS0HkD56mSo-i2aW5YOHWk-mxT3aZdJYcs_Uf_zRGA/exec";
 
-}
 
-function failure(error) {
-  // ignore normal scanning errors
-}
+  /*
+   * ==========================================
+   * SCAN CONTROL
+   * ==========================================
+   */
 
-const scanner = new Html5QrcodeScanner(
-  "reader",
-  {
-    fps: 10,
-    qrbox: 250
+  let lastId = "";
+
+  let lastTime = 0;
+
+  let processing = false;
+
+
+  /*
+   * ==========================================
+   * WHEN QR IS FOUND
+   * ==========================================
+   */
+
+  function onScanSuccess(decodedText, decodedResult) {
+
+    const studentId = String(decodedText).trim();
+
+
+    /*
+     * Ignore empty QR
+     */
+
+    if (!studentId) {
+      return;
+    }
+
+
+    /*
+     * Don't process while another scan
+     * is being sent
+     */
+
+    if (processing) {
+      return;
+    }
+
+
+    /*
+     * Prevent scanning the same QR
+     * multiple times quickly
+     */
+
+    const now = Date.now();
+
+    if (
+      studentId === lastId &&
+      now - lastTime < 5000
+    ) {
+      return;
+    }
+
+
+    lastId = studentId;
+
+    lastTime = now;
+
+    processing = true;
+
+
+    /*
+     * Show found QR
+     */
+
+    showResult(
+      "QR FOUND<br>" +
+      "<div class='id'>" +
+      escapeHtml(studentId) +
+      "</div>" +
+      "<br>Sending...",
+      "loading"
+    );
+
+
+    /*
+     * Send ID to Google Apps Script
+     */
+
+    sendScan(studentId);
+
   }
-);
 
-scanner.render(success, failure);
+
+  /*
+   * ==========================================
+   * QR SCANNER NORMAL FAILURES
+   * ==========================================
+   *
+   * This function is intentionally empty.
+   *
+   * While the camera is looking for a QR,
+   * html5-qrcode generates many "not found"
+   * messages. These are normal.
+   */
+
+  function onScanFailure(error) {
+
+    // Nothing to do here.
+
+  }
+
+
+  /*
+   * ==========================================
+   * SEND SCAN TO GOOGLE APPS SCRIPT
+   * ==========================================
+   *
+   * JSONP is used instead of fetch()
+   * to avoid cross-origin problems.
+   */
+
+  function sendScan(studentId) {
+
+
+    /*
+     * Create unique callback name
+     */
+
+    const callbackName =
+      "scanCallback_" + Date.now();
+
+
+    /*
+     * Get result box
+     */
+
+    const resultBox =
+      document.getElementById("result");
+
+
+    /*
+     * Create callback function
+     */
+
+    window[callbackName] = function(data) {
+
+      console.log("Google Apps Script response:", data);
+
+
+      /*
+       * SUCCESS
+       */
+
+      if (data && data.status === "success") {
+
+        showResult(
+
+          "ATTENDANCE RECORDED" +
+
+          "<div class='name'>" +
+          escapeHtml(
+            data.studentName || "Student"
+          ) +
+          "</div>" +
+
+          "<div class='id'>" +
+          escapeHtml(studentId) +
+          "</div>",
+
+          "success"
+
+        );
+
+      }
+
+
+      /*
+       * ERROR
+       */
+
+      else {
+
+        let message =
+          "Unknown error";
+
+        if (data && data.message) {
+          message = data.message;
+        }
+
+
+        /*
+         * Already registered
+         */
+
+        if (
+          message.includes("بالفعل") ||
+          message.toLowerCase().includes("already")
+        ) {
+
+          showResult(
+
+            "ALREADY REGISTERED" +
+
+            "<br><br>" +
+
+            escapeHtml(message),
+
+            "warning"
+
+          );
+
+        }
+
+
+        /*
+         * Other errors
+         */
+
+        else {
+
+          showResult(
+
+            "ERROR" +
+
+            "<br><br>" +
+
+            escapeHtml(message),
+
+            "error"
+
+          );
+
+        }
+
+      }
+
+
+      /*
+       * Allow next scan after short delay
+       */
+
+      setTimeout(function() {
+
+        processing = false;
+
+        showResult(
+          "Waiting for next QR...",
+          ""
+        );
+
+      }, 2000);
+
+
+      /*
+       * Remove callback
+       */
+
+      delete window[callbackName];
+
+
+      /*
+       * Remove script element
+       */
+
+      const oldScript =
+        document.getElementById(callbackName);
+
+      if (oldScript) {
+
+        oldScript.remove();
+
+      }
+
+    };
+
+
+    /*
+     * ==========================================
+     * CREATE SCRIPT REQUEST
+     * ==========================================
+     */
+
+    const script =
+      document.createElement("script");
+
+
+    script.id = callbackName;
+
+
+    /*
+     * Build request URL
+     */
+
+    script.src =
+      WEB_APP_URL +
+
+      "?action=scan" +
+
+      "&barcode=" +
+      encodeURIComponent(studentId) +
+
+      "&scannedBy=" +
+      encodeURIComponent("QR Scanner") +
+
+      "&callback=" +
+      encodeURIComponent(callbackName);
+
+
+    /*
+     * If connection fails
+     */
+
+    script.onerror = function() {
+
+      console.error(
+        "Failed to contact Google Apps Script"
+      );
+
+
+      showResult(
+
+        "CONNECTION ERROR" +
+
+        "<br><br>" +
+
+        "Could not connect to attendance system.",
+
+        "error"
+
+      );
+
+
+      processing = false;
+
+
+      delete window[callbackName];
+
+
+      script.remove();
+
+    };
+
+
+    /*
+     * Add script to page
+     */
+
+    document.body.appendChild(script);
+
+  }
+
+
+  /*
+   * ==========================================
+   * SHOW RESULT
+   * ==========================================
+   */
+
+  function showResult(message, type) {
+
+    const box =
+      document.getElementById("result");
+
+
+    box.className = "";
+
+
+    if (type) {
+
+      box.classList.add(type);
+
+    }
+
+
+    box.innerHTML = message;
+
+  }
+
+
+  /*
+   * ==========================================
+   * HTML ESCAPE
+   * ==========================================
+   *
+   * Protects the page from unsafe text.
+   */
+
+  function escapeHtml(value) {
+
+    return String(value)
+
+      .replace(/&/g, "&amp;")
+
+      .replace(/</g, "&lt;")
+
+      .replace(/>/g, "&gt;")
+
+      .replace(/"/g, "&quot;")
+
+      .replace(/'/g, "&#039;");
+
+  }
+
+
+  /*
+   * ==========================================
+   * START QR SCANNER
+   * ==========================================
+   */
+
+  const scanner =
+    new Html5QrcodeScanner(
+
+      "reader",
+
+      {
+
+        fps: 10,
+
+        qrbox: {
+          width: 250,
+          height: 250
+        },
+
+        rememberLastUsedCamera: true,
+
+        supportedScanTypes: [
+          Html5QrcodeScanType.SCAN_TYPE_CAMERA
+        ]
+
+      },
+
+      false
+
+    );
+
+
+  /*
+   * Start scanner
+   */
+
+  scanner.render(
+
+    onScanSuccess,
+
+    onScanFailure
+
+  );
 
 </script>
 
