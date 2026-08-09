@@ -1,226 +1,599 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>قارئ الـ QR - تسجيل الحضور</title>
-  <!-- مكتبة HTML5 QR Code -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>ماسح الحضور</title>
+
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: Arial, sans-serif;
-    }
     body {
-      background-color: #f4f6f8;
       margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
+      background: #0f172a;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 18px;
     }
+
+    .wrap {
+      max-width: 560px;
+      margin: auto;
+    }
+
     .card {
-      background: #ffffff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      width: 100%;
-      max-width: 480px;
-      text-align: center;
+      background: #1e293b;
+      padding: 18px;
+      border-radius: 16px;
     }
-    h2 {
-      margin-top: 0;
-      color: #333;
-    }
+
     #reader {
-      width: 100%;
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 15px;
+      max-width: 500px;
+      margin: auto;
     }
-    #status-box {
-      padding: 12px 15px;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: bold;
-      margin-top: 10px;
-      background-color: #e2e8f0;
-      color: #475569;
+
+    #result {
+      margin-top: 16px;
+      padding: 15px;
+      border-radius: 10px;
+      background: #172033;
       min-height: 50px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      line-height: 1.4;
+      font-size: 20px;
     }
-    #status-box.success {
-      background-color: #dcfce7;
-      color: #166534;
-      border: 1px solid #bbf7d0;
+
+    .success {
+      background: #064e3b !important;
+      color: #6ee7b7;
     }
-    #status-box.warn {
-      background-color: #fef3c7;
-      color: #92400e;
-      border: 1px solid #fde68a;
+
+    .error {
+      background: #450a0a !important;
+      color: #fca5a5;
     }
-    #status-box.error {
-      background-color: #fee2e2;
-      color: #991b1b;
-      border: 1px solid #fecaca;
+
+    .warn {
+      background: #451a03 !important;
+      color: #fcd34d;
+    }
+
+    .info {
+      color: #94a3b8;
+      margin-top: 12px;
+    }
+
+    button {
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 8px;
+      margin: 8px;
+      background: #2563eb;
+      color: white;
     }
   </style>
+
+  <!-- مكتبة QR -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
 </head>
+
 <body>
 
-  <div class="card">
-    <h2>📷 مسح رمز الحضور</h2>
-    <div id="reader"></div>
-    <div id="status-box">📷 في انتظار QR...</div>
+  <div class="wrap">
+
+    <h1>📷 ماسح الحضور</h1>
+
+    <div class="card">
+
+      <div id="reader"></div>
+
+      <div id="result">
+        📷 في انتظار QR...
+      </div>
+
+      <div class="info">
+        امسح أكواد الطلاب واحدًا وراء الآخر.
+      </div>
+
+    </div>
+
   </div>
 
+
   <script>
-    // ⚠️ ضع رابط الـ Web App الخاص بك هنا
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwkLfvwdnr8Sm1EL1ZXoQ0vvU8kI1rIrgxJcgGlaStcEzfiL6jtGsxPhGYlY6EyDh2kqA/exec";
-    
-    // ⚠️ التوكن المطابق تماماً لما هو مكتوب في ملف Code.gs
-    const SCAN_TOKEN = "JAWALA-2026-CHANGE-ME-7f3a9";
+
+    /*************************************************
+     * GOOGLE APPS SCRIPT WEB APP
+     *************************************************/
+
+    const WEB_APP_URL =
+      "https://script.google.com/macros/s/AKfycbwkLfvwdnr8Sm1EL1ZXoQ0vvU8kI1rIrgxJcgGlaStcEzfiL6jtGsxPhGYlY6EyDh2kqA/exec";
+
+
+    /*************************************************
+     * SCAN TOKEN
+     *
+     * لازم يكون نفس SCAN_TOKEN الموجود في Code.gs
+     *************************************************/
+
+    const SCAN_TOKEN =
+      "JAWALA-2026-CHANGE-ME-7f3a9";
+
+
+    /*************************************************
+     * VARIABLES
+     *************************************************/
 
     let processing = false;
 
-    // دالة التنبيهات الصوتية
+    let lastId = "";
+
+    let lastTime = 0;
+
+
+    /*************************************************
+     * SOUND
+     *************************************************/
+
     function beep(type) {
+
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+
+        const C =
+          window.AudioContext ||
+          window.webkitAudioContext;
+
+        const ctx = new C();
+
+        const o =
+          ctx.createOscillator();
+
+        const g =
+          ctx.createGain();
 
         if (type === "success") {
-          osc.frequency.setValueAtTime(880, ctx.currentTime);
-          gain.gain.setValueAtTime(0.2, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.15);
+
+          o.frequency.value = 880;
+
         } else if (type === "warn") {
-          osc.frequency.setValueAtTime(440, ctx.currentTime);
-          gain.gain.setValueAtTime(0.2, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.25);
+
+          o.frequency.value = 440;
+
         } else {
-          osc.type = "sawtooth";
-          osc.frequency.setValueAtTime(220, ctx.currentTime);
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.35);
+
+          o.frequency.value = 220;
+
         }
+
+        o.connect(g);
+
+        g.connect(ctx.destination);
+
+        g.gain.value = 0.08;
+
+        o.start();
+
+        o.stop(
+          ctx.currentTime +
+          (type === "success" ? 0.12 : 0.22)
+        );
+
       } catch (e) {
-        console.warn("Audio Context error:", e);
+
+        console.log("Audio error:", e);
+
       }
+
     }
 
-    // دالة الاهتزاز في الهواتف
+
+    /*************************************************
+     * VIBRATION
+     *************************************************/
+
     function vibrate(ms) {
+
       if (navigator.vibrate) {
+
         navigator.vibrate(ms);
+
       }
+
     }
 
-    // دالة حماية النصوص من الـ XSS
-    function esc(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+
+    /*************************************************
+     * ESCAPE HTML
+     *************************************************/
+
+    function esc(s) {
+
+      return String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
     }
 
-    // عرض الحالة في الصندوق
-    function show(msg, cls) {
-      const box = document.getElementById("status-box");
-      box.className = cls;
-      box.innerHTML = msg;
+
+    /*************************************************
+     * SHOW RESULT
+     *************************************************/
+
+    function show(text, className) {
+
+      const box =
+        document.getElementById("result");
+
+      box.className =
+        className || "";
+
+      box.innerHTML =
+        text;
+
     }
 
-    // إرسال كود الـ QR للباك إند
-    async function sendScan(id) {
-      try {
-        const payload = {
-          action: "scan",
-          barcode: id,
-          scannedBy: "QR Scanner",
-          token: SCAN_TOKEN
+
+    /*************************************************
+     * SEND QR TO GOOGLE APPS SCRIPT
+     *
+     * يستخدم GET + JSONP
+     * ومتوافق مع doGet() الموجود عندك
+     *************************************************/
+
+    function sendScan(id) {
+
+      const callbackName =
+        "cb_" + Date.now();
+
+
+      /***********************************************
+       * CALLBACK
+       ***********************************************/
+
+      window[callbackName] =
+        function (data) {
+
+          try {
+
+            if (data.status === "success") {
+
+              /*****************************************
+               * SUCCESS
+               *****************************************/
+
+              beep("success");
+
+              vibrate([100, 60, 100]);
+
+              show(
+                "✅ تم تسجيل الحضور" +
+                "<br>" +
+                "<b>" +
+                esc(data.studentName || id) +
+                "</b>" +
+                "<br>" +
+                "<small>الكود: " +
+                esc(id) +
+                "</small>",
+                "success"
+              );
+
+            } else {
+
+              /*****************************************
+               * ERROR
+               *****************************************/
+
+              const msg =
+                data.message ||
+                "حدث خطأ غير معروف";
+
+
+              if (
+                msg.includes("بالفعل") ||
+                msg.includes("مسجل")
+              ) {
+
+                beep("warn");
+
+                vibrate(250);
+
+                show(
+                  "⚠️ الطالب مسجل بالفعل" +
+                  "<br>" +
+                  esc(msg),
+                  "warn"
+                );
+
+              } else {
+
+                beep("error");
+
+                vibrate(400);
+
+                show(
+                  "❌ " +
+                  esc(msg),
+                  "error"
+                );
+
+              }
+
+            }
+
+          } catch (e) {
+
+            console.error(
+              "Callback error:",
+              e
+            );
+
+            show(
+              "❌ حدث خطأ أثناء معالجة النتيجة",
+              "error"
+            );
+
+          }
+
+
+          /*****************************************
+           * CLEAN CALLBACK
+           *****************************************/
+
+          delete window[callbackName];
+
+
+          const oldScript =
+            document.getElementById(callbackName);
+
+
+          if (oldScript) {
+
+            oldScript.remove();
+
+          }
+
+
+          /*****************************************
+           * READY FOR NEXT QR
+           *****************************************/
+
+          setTimeout(
+            function () {
+
+              processing = false;
+
+              show(
+                "📷 في انتظار QR...",
+                ""
+              );
+
+            },
+            1200
+          );
+
         };
 
-        // استخدام fetch بـ text/plain لتفادي مشكلة CORS Preflight المعقدة مع Google Apps Script
-        const response = await fetch(WEB_APP_URL, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload)
-        });
 
-        const data = await response.json();
+      /************************************************
+       * CREATE SCRIPT
+       ************************************************/
 
-        if (data.status === "success") {
-          beep("success");
-          vibrate([100, 60, 100]);
-          show("✅ تم تسجيل الحضور<br><b>" + esc(data.studentName || id) + "</b><br><small>الكود: " + esc(id) + "</small>", "success");
-        } else {
-          const msg = data.message || "حدث خطأ غير معروف";
-          if (msg.includes("بالفعل")) {
-            beep("warn");
-            vibrate(250);
-            show("⚠️ الطالب مسجل بالفعل<br>" + esc(msg), "warn");
-          } else {
-            beep("error");
-            vibrate(400);
-            show("❌ " + esc(msg), "error");
-          }
-        }
-      } catch (err) {
-  console.error("Fetch error:", err);
-  beep("error");
-  vibrate(400);
+      const script =
+        document.createElement("script");
 
-  show(
-    "❌ خطأ الاتصال:<br><small>" +
-    esc(err.message || String(err)) +
-    "</small>",
-    "error"
-  );
-} finally {
-        // إعادة الفتح لمسح كود جديد بعد ثانية ونصف
-        setTimeout(() => {
+
+      script.id =
+        callbackName;
+
+
+      /************************************************
+       * BUILD REQUEST URL
+       ************************************************/
+
+      script.src =
+        WEB_APP_URL +
+
+        "?action=scan" +
+
+        "&token=" +
+        encodeURIComponent(SCAN_TOKEN) +
+
+        "&barcode=" +
+        encodeURIComponent(id) +
+
+        "&scannedBy=" +
+        encodeURIComponent("QR Scanner") +
+
+        "&callback=" +
+        encodeURIComponent(callbackName);
+
+
+      /************************************************
+       * CONNECTION ERROR
+       ************************************************/
+
+      script.onerror =
+        function () {
+
           processing = false;
-          show("📷 في انتظار QR...", "");
-        }, 1500);
-      }
+
+          beep("error");
+
+          vibrate(400);
+
+          show(
+            "❌ فشل الاتصال بنظام الحضور",
+            "error"
+          );
+
+
+          delete window[callbackName];
+
+
+          script.remove();
+
+        };
+
+
+      /************************************************
+       * SEND REQUEST
+       ************************************************/
+
+      document.body.appendChild(script);
+
     }
 
-    // النجاح عند التقاط الـ QR
-    function onScanSuccess(decodedText, decodedResult) {
-      if (processing) return;
+
+    /*************************************************
+     * QR SCAN SUCCESS
+     *************************************************/
+
+    function onScanSuccess(decodedText) {
+
+      const id =
+        String(decodedText || "").trim();
+
+
+      /***********************************************
+       * EMPTY
+       ***********************************************/
+
+      if (!id) {
+
+        return;
+
+      }
+
+
+      /***********************************************
+       * PREVENT MULTIPLE SCANS
+       ***********************************************/
+
+      if (processing) {
+
+        return;
+
+      }
+
+
+      /***********************************************
+       * PREVENT SAME QR FOR 5 SECONDS
+       ***********************************************/
+
+      const now =
+        Date.now();
+
+
+      if (
+        id === lastId &&
+        now - lastTime < 5000
+      ) {
+
+        return;
+
+      }
+
+
+      lastId =
+        id;
+
+      lastTime =
+        now;
+
       processing = true;
 
-      const code = decodedText.trim();
-      show("⏳ جاري تسجيل الكود: " + esc(code) + "...", "");
-      sendScan(code);
+
+      /***********************************************
+       * SHOW SCANNED VALUE
+       ***********************************************/
+
+      show(
+
+        "🔎 تم العثور على QR" +
+
+        "<br>" +
+
+        "<b>" +
+
+        esc(id) +
+
+        "</b>" +
+
+        "<br>" +
+
+        "<small>جاري تسجيل الحضور...</small>",
+
+        ""
+
+      );
+
+
+      /***********************************************
+       * SEND TO SERVER
+       ***********************************************/
+
+      sendScan(id);
+
     }
 
-    // تهيئة كاميرا السكانر
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      { 
-        fps: 10, 
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0
-      },
-      /* verbose= */ false
+
+    /*************************************************
+     * QR SCAN FAILURE
+     *************************************************/
+
+    function onScanFailure(error) {
+
+      // متعمد عدم عرض أخطاء المسح
+      // لأنها بتظهر بشكل مستمر أثناء البحث عن QR
+
+    }
+
+
+    /*************************************************
+     * START QR SCANNER
+     *************************************************/
+
+    const scanner =
+      new Html5QrcodeScanner(
+
+        "reader",
+
+        {
+
+          fps: 10,
+
+          qrbox: {
+            width: 250,
+            height: 250
+          },
+
+          rememberLastUsedCamera: true,
+
+          supportedScanTypes: [
+
+            Html5QrcodeScanType.SCAN_TYPE_CAMERA
+
+          ]
+
+        },
+
+        false
+
+      );
+
+
+    scanner.render(
+      onScanSuccess,
+      onScanFailure
     );
 
-    html5QrcodeScanner.render(onScanSuccess);
+
   </script>
+
 </body>
+
 </html>
