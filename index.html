@@ -180,11 +180,17 @@
           }
         }
       } catch (err) {
-        console.error("Fetch error:", err);
-        beep("error");
-        vibrate(400);
-        show("❌ فشل الاتصال بالسيرفر", "error");
-      } finally {
+  console.error("Fetch error:", err);
+  beep("error");
+  vibrate(400);
+
+  show(
+    "❌ خطأ الاتصال:<br><small>" +
+    esc(err.message || String(err)) +
+    "</small>",
+    "error"
+  );
+} finally {
         // إعادة الفتح لمسح كود جديد بعد ثانية ونصف
         setTimeout(() => {
           processing = false;
