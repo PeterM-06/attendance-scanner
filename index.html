@@ -29,6 +29,8 @@ button{padding:10px 18px;border:0;border-radius:8px;margin:8px;background:#2563e
 </div>
 <script>
 const WEB_APP_URL="https://script.google.com/macros/s/AKfycbxchjrSC4Wl5-Q1noYdEdXr3L0yPS0HkD56mSo-i2aW5YOHWk-mxT3aZdJYcs_Uf_zRGA/exec";
+/* لازم يكون نفس القيمة بالظبط الموجودة في Code.gs (SCAN_TOKEN) */
+const SCAN_TOKEN="JAWALA-2026-CHANGE-ME-7f3a9";
 let processing=false,lastId="",lastTime=0;
 
 function beep(type){
@@ -64,7 +66,7 @@ function sendScan(id){
     setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1200);
   };
   const s=document.createElement("script");s.id=cb;
-  s.src=WEB_APP_URL+"?action=scan&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&callback="+cb;
+  s.src=WEB_APP_URL+"?action=scan&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&callback="+cb;
   s.onerror=function(){processing=false;show("❌ فشل الاتصال بنظام الحضور","error");delete window[cb];s.remove();};
   document.body.appendChild(s);
 }
