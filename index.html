@@ -1,599 +1,204 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <title>ماسح الحضور</title>
-
-  <style>
-    body {
-      margin: 0;
-      background: #0f172a;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 18px;
-    }
-
-    .wrap {
-      max-width: 560px;
-      margin: auto;
-    }
-
-    .card {
-      background: #1e293b;
-      padding: 18px;
-      border-radius: 16px;
-    }
-
-    #reader {
-      max-width: 500px;
-      margin: auto;
-    }
-
-    #result {
-      margin-top: 16px;
-      padding: 15px;
-      border-radius: 10px;
-      background: #172033;
-      min-height: 50px;
-      font-size: 20px;
-    }
-
-    .success {
-      background: #064e3b !important;
-      color: #6ee7b7;
-    }
-
-    .error {
-      background: #450a0a !important;
-      color: #fca5a5;
-    }
-
-    .warn {
-      background: #451a03 !important;
-      color: #fcd34d;
-    }
-
-    .info {
-      color: #94a3b8;
-      margin-top: 12px;
-    }
-
-    button {
-      padding: 10px 18px;
-      border: 0;
-      border-radius: 8px;
-      margin: 8px;
-      background: #2563eb;
-      color: white;
-    }
-  </style>
-
-  <!-- مكتبة QR -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
-
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ماسح الحضور</title>
+<style>
+body{margin:0;background:#0f172a;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:18px}
+.wrap{max-width:560px;margin:auto}
+.card{background:#1e293b;padding:18px;border-radius:16px}
+#reader{max-width:500px;margin:auto}
+#result{margin-top:16px;padding:15px;border-radius:10px;background:#172033;min-height:50px;font-size:20px}
+.success{background:#064e3b!important;color:#6ee7b7}
+.error{background:#450a0a!important;color:#fca5a5}
+.warn{background:#451a03!important;color:#fcd34d}
+.info{color:#94a3b8;margin-top:12px}
+button{padding:10px 18px;border:0;border-radius:8px;margin:8px;background:#2563eb;color:white}
+</style>
+<script src="https://unpkg.com/html5-qrcode"></script>
 </head>
-
 <body>
+<div class="wrap">
+<h1>📷 ماسح الحضور</h1>
+<div class="card">
+<div id="reader"></div>
+<div id="result">في انتظار QR...</div>
+<div class="info">امسح أكواد الطلاب واحدًا وراء الآخر.</div>
+<button onclick="testConnection()">🔧 اختبار الاتصال</button>
+<div id="diag" style="text-align:right;font-size:13px;color:#94a3b8;margin-top:8px;white-space:pre-wrap;word-break:break-all"></div>
+</div>
+</div>
+<script>
+const WEB_APP_URL="https://script.google.com/macros/s/AKfycbxchjrSC4Wl5-Q1noYdEdXr3L0yPS0HkD56mSo-i2aW5YOHWk-mxT3aZdJYcs_Uf_zRGA/exec";
+/* لازم يكون نفس القيمة بالظبط الموجودة في Code.gs (SCAN_TOKEN) */
+const SCAN_TOKEN="JAWALA-2026-CHANGE-ME-7f3a9";
+let processing=false,lastId="",lastTime=0;
 
-  <div class="wrap">
+function beep(type){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    const ctx=new C(),o=ctx.createOscillator(),g=ctx.createGain();
+    o.frequency.value=type==="success"?880:type==="warn"?440:220;
+    o.connect(g);g.connect(ctx.destination);g.gain.value=.08;
+    o.start();o.stop(ctx.currentTime+(type==="success"?.12:.22));
+  }catch(e){}
+}
+function vibrate(ms){if(navigator.vibrate) navigator.vibrate(ms);}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+function show(t,c){const b=document.getElementById("result");b.className=c||"";b.innerHTML=t;}
 
-    <h1>📷 ماسح الحضور</h1>
+/* =========================
+   اختبار الاتصال (تشخيص)
+   بيستخدم fetch عشان نقدر نشوف
+   الخطأ الحقيقي على الشاشة من غير
+   ما نفتح Developer Tools
+========================= */
 
-    <div class="card">
+async function testConnection(){
+  const diag = document.getElementById("diag");
+  diag.textContent = "⏳ جاري الاختبار (خطوتين)...";
 
-      <div id="reader"></div>
+  const testUrl = WEB_APP_URL + "?action=scan&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN) + "&callback=diagCb";
 
-      <div id="result">
-        📷 في انتظار QR...
-      </div>
+  let report = "";
 
-      <div class="info">
-        امسح أكواد الطلاب واحدًا وراء الآخر.
-      </div>
+  /* اختبار 1: fetch عادي (متوقع يفشل بـ CORS، ده طبيعي ومش المشكلة) */
+  try{
+    const res = await fetch(testUrl, {method:"GET", mode:"cors"});
+    const text = await res.text();
+    report += "✅ اختبار 1 (CORS): نجح\nHTTP: " + res.status + "\n\n";
+  }catch(err){
+    report += "ℹ️ اختبار 1 (CORS): فشل زي المتوقع (Google بيمنع قراءة الرد من دومين تاني، ده طبيعي مش عيب)\n\n";
+  }
 
-    </div>
+  /* اختبار 2: fetch بوضع no-cors — بيبعت الطلب فعليًا حتى لو مش هنقدر نقرأ الرد.
+     لو ده فشل برضو، يبقى فيه حاجة حقيقية بتمنع وصول الطلب (adblocker / فايروول / DNS) */
+  try{
+    await fetch(testUrl, {method:"GET", mode:"no-cors"});
+    report += "✅ اختبار 2 (وصول الطلب فعليًا): نجح — يعني في الغالب الطلب بيوصل للسيرفر\n\n";
+    report += "لو السكان لسه بيفشل رغم كده، جرب صفحة السكانر في متصفح/جهاز تاني للتأكد.";
+  }catch(err){
+    report += "❌ اختبار 2 (وصول الطلب فعليًا): فشل\n";
+    report += "تفاصيل: " + (err && err.message ? err.message : String(err)) + "\n\n";
+    report += "ده بيأكد إن فيه حاجة في المتصفح/الجهاز/الشبكة بتمنع الوصول لـ script.google.com (أداة حجب إعلانات، فايروول، أو DNS بيفلتر الدومين).\n";
+    report += "جرب: نافذة متخفية، أو قفل أي إضافة حجب، أو شبكة نت تانية.";
+  }
 
-  </div>
+  diag.textContent = report;
+}
 
+function sendScan(id){
+  const cb="cb_"+Date.now();
+  let settled=false;
 
-  <script>
+  window[cb]=function(data){
+    settled=true;
+    if(data.status==="success"){
+      beep("success");vibrate([100,60,100]);
+      show("✅ تم تسجيل الحضور<br><b>"+esc(data.studentName||id)+"</b><br><small>"+esc(id)+"</small>","success");
+    }else{
+      const msg=data.message||"حدث خطأ";
+      if(msg.includes("بالفعل")){
+        beep("warn");vibrate(250);
+        show("⚠️ الطالب مسجل بالفعل<br>"+esc(msg),"warn");
+      }else{
+        beep("error");vibrate(400);
+        show("❌ "+esc(msg),"error");
+      }
+    }
+    delete window[cb]; const s=document.getElementById(cb); if(s)s.remove();
+    setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1200);
+  };
 
-    /*************************************************
-     * GOOGLE APPS SCRIPT WEB APP
-     *************************************************/
+  const src = WEB_APP_URL+"?action=scan&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&callback="+cb;
 
-    const WEB_APP_URL =
-      "https://script.google.com/macros/s/AKfycbwkLfvwdnr8Sm1EL1ZXoQ0vvU8kI1rIrgxJcgGlaStcEzfiL6jtGsxPhGYlY6EyDh2kqA/exec";
+  /* =========================
+     خطة احتياطية:
+     لو طريقة الـ <script> فشلت أو اتعلّقت،
+     نجرب نبعت نفس الطلب بـ fetch(no-cors).
+     ده بيبعت الطلب فعليًا للسيرفر (يسجل الحضور)
+     حتى لو مش هنقدر نقرا رد التأكيد.
+  ========================= */
 
+  function fallbackSend(reason){
+    if(settled) return;
+    settled = true;
+    delete window[cb];
 
-    /*************************************************
-     * SCAN TOKEN
-     *
-     * لازم يكون نفس SCAN_TOKEN الموجود في Code.gs
-     *************************************************/
-
-    const SCAN_TOKEN =
-      "JAWALA-2026-CHANGE-ME-7f3a9";
-
-
-    /*************************************************
-     * VARIABLES
-     *************************************************/
-
-    let processing = false;
-
-    let lastId = "";
-
-    let lastTime = 0;
-
-
-    /*************************************************
-     * SOUND
-     *************************************************/
-
-    function beep(type) {
-
-      try {
-
-        const C =
-          window.AudioContext ||
-          window.webkitAudioContext;
-
-        const ctx = new C();
-
-        const o =
-          ctx.createOscillator();
-
-        const g =
-          ctx.createGain();
-
-        if (type === "success") {
-
-          o.frequency.value = 880;
-
-        } else if (type === "warn") {
-
-          o.frequency.value = 440;
-
-        } else {
-
-          o.frequency.value = 220;
-
-        }
-
-        o.connect(g);
-
-        g.connect(ctx.destination);
-
-        g.gain.value = 0.08;
-
-        o.start();
-
-        o.stop(
-          ctx.currentTime +
-          (type === "success" ? 0.12 : 0.22)
+    fetch(src, {method:"GET", mode:"no-cors"})
+      .then(()=>{
+        beep("warn");vibrate(200);
+        show(
+          "📤 اتبعت الطلب (بطريقة احتياطية)<br>" +
+          "<b>"+esc(id)+"</b><br>" +
+          "<small>اتأكد من تقرير المحاضرة إن الطالب اتسجل.</small>",
+          "warn"
         );
+        setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
+      })
+      .catch(()=>{
+        /* آخر محاولة: صورة، بتشتغل حتى لو الأدوات التانية اتحجبت */
+        const img = new Image();
+        let imgDone = false;
 
-      } catch (e) {
+        img.onload = img.onerror = function(){
+          if(imgDone) return;
+          imgDone = true;
+          beep("warn");vibrate(200);
+          show(
+            "📤 اتبعت الطلب (محاولة أخيرة)<br>" +
+            "<b>"+esc(id)+"</b><br>" +
+            "<small>اتأكد من تقرير المحاضرة إن الطالب اتسجل فعلاً.</small>",
+            "warn"
+          );
+          setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
+        };
 
-        console.log("Audio error:", e);
+        img.src = src + "&_img=1";
 
-      }
-
-    }
-
-
-    /*************************************************
-     * VIBRATION
-     *************************************************/
-
-    function vibrate(ms) {
-
-      if (navigator.vibrate) {
-
-        navigator.vibrate(ms);
-
-      }
-
-    }
-
-
-    /*************************************************
-     * ESCAPE HTML
-     *************************************************/
-
-    function esc(s) {
-
-      return String(s || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-
-    }
-
-
-    /*************************************************
-     * SHOW RESULT
-     *************************************************/
-
-    function show(text, className) {
-
-      const box =
-        document.getElementById("result");
-
-      box.className =
-        className || "";
-
-      box.innerHTML =
-        text;
-
-    }
-
-
-    /*************************************************
-     * SEND QR TO GOOGLE APPS SCRIPT
-     *
-     * يستخدم GET + JSONP
-     * ومتوافق مع doGet() الموجود عندك
-     *************************************************/
-
-    function sendScan(id) {
-
-      const callbackName =
-        "cb_" + Date.now();
-
-
-      /***********************************************
-       * CALLBACK
-       ***********************************************/
-
-      window[callbackName] =
-        function (data) {
-
-          try {
-
-            if (data.status === "success") {
-
-              /*****************************************
-               * SUCCESS
-               *****************************************/
-
-              beep("success");
-
-              vibrate([100, 60, 100]);
-
-              show(
-                "✅ تم تسجيل الحضور" +
-                "<br>" +
-                "<b>" +
-                esc(data.studentName || id) +
-                "</b>" +
-                "<br>" +
-                "<small>الكود: " +
-                esc(id) +
-                "</small>",
-                "success"
-              );
-
-            } else {
-
-              /*****************************************
-               * ERROR
-               *****************************************/
-
-              const msg =
-                data.message ||
-                "حدث خطأ غير معروف";
-
-
-              if (
-                msg.includes("بالفعل") ||
-                msg.includes("مسجل")
-              ) {
-
-                beep("warn");
-
-                vibrate(250);
-
-                show(
-                  "⚠️ الطالب مسجل بالفعل" +
-                  "<br>" +
-                  esc(msg),
-                  "warn"
-                );
-
-              } else {
-
-                beep("error");
-
-                vibrate(400);
-
-                show(
-                  "❌ " +
-                  esc(msg),
-                  "error"
-                );
-
-              }
-
-            }
-
-          } catch (e) {
-
-            console.error(
-              "Callback error:",
-              e
-            );
-
+        setTimeout(()=>{
+          if(!imgDone){
+            imgDone = true;
+            beep("error");vibrate(400);
             show(
-              "❌ حدث خطأ أثناء معالجة النتيجة",
+              "❌ فشل الاتصال نهائيًا بكل الطرق<br>" +
+              "<small>جرب نافذة متخفية (Incognito)، أو اقفل أي أداة حجب إعلانات، أو جرب شبكة نت تانية</small>",
               "error"
             );
-
+            processing=false;
           }
+        },5000);
+      });
+  }
 
+  const s=document.createElement("script");s.id=cb;s.src=src;
 
-          /*****************************************
-           * CLEAN CALLBACK
-           *****************************************/
+  s.onerror=function(){
+    if(s.parentNode) s.remove();
+    fallbackSend("فشل تحميل السكريبت");
+  };
 
-          delete window[callbackName];
+  document.body.appendChild(s);
 
-
-          const oldScript =
-            document.getElementById(callbackName);
-
-
-          if (oldScript) {
-
-            oldScript.remove();
-
-          }
-
-
-          /*****************************************
-           * READY FOR NEXT QR
-           *****************************************/
-
-          setTimeout(
-            function () {
-
-              processing = false;
-
-              show(
-                "📷 في انتظار QR...",
-                ""
-              );
-
-            },
-            1200
-          );
-
-        };
-
-
-      /************************************************
-       * CREATE SCRIPT
-       ************************************************/
-
-      const script =
-        document.createElement("script");
-
-
-      script.id =
-        callbackName;
-
-
-      /************************************************
-       * BUILD REQUEST URL
-       ************************************************/
-
-      script.src =
-        WEB_APP_URL +
-
-        "?action=scan" +
-
-        "&token=" +
-        encodeURIComponent(SCAN_TOKEN) +
-
-        "&barcode=" +
-        encodeURIComponent(id) +
-
-        "&scannedBy=" +
-        encodeURIComponent("QR Scanner") +
-
-        "&callback=" +
-        encodeURIComponent(callbackName);
-
-
-      /************************************************
-       * CONNECTION ERROR
-       ************************************************/
-
-      script.onerror =
-        function () {
-
-          processing = false;
-
-          beep("error");
-
-          vibrate(400);
-
-          show(
-            "❌ فشل الاتصال بنظام الحضور",
-            "error"
-          );
-
-
-          delete window[callbackName];
-
-
-          script.remove();
-
-        };
-
-
-      /************************************************
-       * SEND REQUEST
-       ************************************************/
-
-      document.body.appendChild(script);
-
+  /* لو مفيش رد خالص (لا نجاح ولا فشل) خلال 8 ثواني، نجرب الاحتياطي */
+  setTimeout(()=>{
+    if(!settled){
+      if(s.parentNode) s.remove();
+      fallbackSend("انتهت المهلة من غير رد");
     }
-
-
-    /*************************************************
-     * QR SCAN SUCCESS
-     *************************************************/
-
-    function onScanSuccess(decodedText) {
-
-      const id =
-        String(decodedText || "").trim();
-
-
-      /***********************************************
-       * EMPTY
-       ***********************************************/
-
-      if (!id) {
-
-        return;
-
-      }
-
-
-      /***********************************************
-       * PREVENT MULTIPLE SCANS
-       ***********************************************/
-
-      if (processing) {
-
-        return;
-
-      }
-
-
-      /***********************************************
-       * PREVENT SAME QR FOR 5 SECONDS
-       ***********************************************/
-
-      const now =
-        Date.now();
-
-
-      if (
-        id === lastId &&
-        now - lastTime < 5000
-      ) {
-
-        return;
-
-      }
-
-
-      lastId =
-        id;
-
-      lastTime =
-        now;
-
-      processing = true;
-
-
-      /***********************************************
-       * SHOW SCANNED VALUE
-       ***********************************************/
-
-      show(
-
-        "🔎 تم العثور على QR" +
-
-        "<br>" +
-
-        "<b>" +
-
-        esc(id) +
-
-        "</b>" +
-
-        "<br>" +
-
-        "<small>جاري تسجيل الحضور...</small>",
-
-        ""
-
-      );
-
-
-      /***********************************************
-       * SEND TO SERVER
-       ***********************************************/
-
-      sendScan(id);
-
-    }
-
-
-    /*************************************************
-     * QR SCAN FAILURE
-     *************************************************/
-
-    function onScanFailure(error) {
-
-      // متعمد عدم عرض أخطاء المسح
-      // لأنها بتظهر بشكل مستمر أثناء البحث عن QR
-
-    }
-
-
-    /*************************************************
-     * START QR SCANNER
-     *************************************************/
-
-    const scanner =
-      new Html5QrcodeScanner(
-
-        "reader",
-
-        {
-
-          fps: 10,
-
-          qrbox: {
-            width: 250,
-            height: 250
-          },
-
-          rememberLastUsedCamera: true,
-
-          supportedScanTypes: [
-
-            Html5QrcodeScanType.SCAN_TYPE_CAMERA
-
-          ]
-
-        },
-
-        false
-
-      );
-
-
-    scanner.render(
-      onScanSuccess,
-      onScanFailure
-    );
-
-
-  </script>
-
+  },8000);
+}
+function onScanSuccess(text){
+  const id=String(text||"").trim(); if(!id||processing)return;
+  const now=Date.now(); if(id===lastId&&now-lastTime<5000)return;
+  lastId=id;lastTime=now;processing=true;
+  show("🔎 تم العثور على QR<br><b>"+esc(id)+"</b><br><small>جاري التسجيل...</small>","");
+  sendScan(id);
+}
+function onScanFailure(){}
+
+new Html5QrcodeScanner("reader",{fps:10,qrbox:{width:250,height:250},rememberLastUsedCamera:true,supportedScanTypes:[Html5QrcodeScanType.SCAN_TYPE_CAMERA]},false).render(onScanSuccess,onScanFailure);
+</script>
 </body>
-
 </html>
