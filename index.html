@@ -1,4 +1,3 @@
-الحمدالله اتحدث اهو ولاكن الكود مش راضى يشتغل 
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -21,12 +20,12 @@ button{padding:10px 18px;border:0;border-radius:8px;margin:8px;background:#2563e
 </head>
 <body>
 <div class="wrap">
-<h1>📷 تجربة ماسح الحضور</h1>
+<h1>📷 ماسح الحضور</h1>
 <div class="card">
 <div id="reader"></div>
 <div id="result">في انتظار QR...</div>
 <div class="info">امسح أكواد الطلاب واحدًا وراء الآخر.</div>
-<button onclick="testConnection()">🔧 اختبار الاتصال تجربة</button>
+<button onclick="testConnection()">🔧 اختبار الاتصال</button>
 <div id="diag" style="text-align:right;font-size:13px;color:#94a3b8;margin-top:8px;white-space:pre-wrap;word-break:break-all"></div>
 </div>
 </div>
@@ -36,111 +35,109 @@ const SCAN_TOKEN="JAWALA-2026-CHANGE-ME-7f3a9";
 let processing=false,lastId="",lastTime=0;
 
 function beep(type){
-  try{
-    const C=window.AudioContext||window.webkitAudioContext;
-    const ctx=new C(),o=ctx.createOscillator(),g=ctx.createGain();
-    o.frequency.value=type==="success"?880:type==="warn"?440:220;
-    o.connect(g);g.connect(ctx.destination);g.gain.value=.08;
-    o.start();o.stop(ctx.currentTime+(type==="success"?.12:.22));
-  }catch(e){}
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    const ctx=new C(),o=ctx.createOscillator(),g=ctx.createGain();
+    o.frequency.value=type==="success"?880:type==="warn"?440:220;
+    o.connect(g);g.connect(ctx.destination);g.gain.value=.08;
+    o.start();o.stop(ctx.currentTime+(type==="success"?.12:.22));
+  }catch(e){}
 }
 function vibrate(ms){if(navigator.vibrate) navigator.vibrate(ms);}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
 function show(t,c){const b=document.getElementById("result");b.className=c||"";b.innerHTML=t;}
 
 /* =========================
-   إرسال أي طلب عن طريق iframe مخفي.
-   الرد بيوصلنا عن طريق postMessage بدل ما نعتمد
-   على <script src> اللي كروم بقى يحجب قراءة رده
-   (Opaque Response Blocking) حتى لو اتنفذ صح
-   على السيرفر فعليًا.
+   إرسال أي طلب عن طريق iframe مخفي.
+   الرد بيوصلنا عن طريق postMessage بدل ما نعتمد
+   على <script src> اللي كروم بقى يحجب قراءة رده
+   (Opaque Response Blocking) حتى لو اتنفذ صح
+   على السيرفر فعليًا.
 ========================= */
 
 function sendViaIframe(url, onResult, onTimeout, timeoutMs){
-  let settled = false;
+  let settled = false;
 
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  iframe.src = url;
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.src = url;
 
-  function handler(event){
-    if(settled) return;
-    const d = event.data;
-    if(!d || typeof d !== "object" || !("status" in d)) return;
-    settled = true;
-    window.removeEventListener("message", handler);
-    if(iframe.parentNode) iframe.remove();
-    onResult(d);
-  }
+  function handler(event){
+    if(settled) return;
+    const d = event.data;
+    if(!d || typeof d !== "object" || !("status" in d)) return;
+    settled = true;
+    window.removeEventListener("message", handler);
+    if(iframe.parentNode) iframe.remove();
+    onResult(d);
+  }
 
-  window.addEventListener("message", handler);
-  document.body.appendChild(iframe);
+  window.addEventListener("message", handler);
+  document.body.appendChild(iframe);
 
-  setTimeout(()=>{
-    if(!settled){
-      settled = true;
-      window.removeEventListener("message", handler);
-      if(iframe.parentNode) iframe.remove();
-      onTimeout();
-    }
-  }, timeoutMs || 10000);
+  setTimeout(()=>{
+    if(!settled){
+      settled = true;
+      window.removeEventListener("message", handler);
+      if(iframe.parentNode) iframe.remove();
+      onTimeout();
+    }
+  }, timeoutMs || 10000);
 }
 
 async function testConnection(){
-  const diag = document.getElementById("diag");
-  diag.textContent = "⏳ جاري الاختبار...";
-  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN);
+  const diag = document.getElementById("diag");
+  diag.textContent = "⏳ جاري الاختبار...";
+  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN);
 
-  sendViaIframe(
-    testUrl,
-    (res)=>{
-      diag.textContent = "✅ الاتصال يعمل بنجاح! السيرفر رد بـ:\n" + JSON.stringify(res, null, 2);
-    },
-    ()=>{
-      diag.textContent = "❌ لسه مفيش رد بعد 10 ثواني. تأكد من رابط الـ Web App، ومن عمل Deploy جديد بعد آخر تعديل.";
-    },
-    10000
-  );
+  sendViaIframe(
+    testUrl,
+    (res)=>{
+      diag.textContent = "✅ الاتصال يعمل بنجاح! السيرفر رد بـ:\n" + JSON.stringify(res, null, 2);
+    },
+    ()=>{
+      diag.textContent = "❌ لسه مفيش رد بعد 10 ثواني. تأكد من رابط الـ Web App، ومن عمل Deploy جديد بعد آخر تعديل.";
+    },
+    10000
+  );
 }
 
-// ضع رابط الـ Exec المباشر هنا
-const WEB_APP_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
-const SCAN_TOKEN = "your_token_here"; // التوكن الخاص بك إن وجد
+function sendScan(id){
+  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN);
 
-async function sendScanToSheet(studentId) {
-  try {
-    const formData = new URLSearchParams();
-    formData.append('action', 'scan');
-    formData.append('studentId', studentId);
-    formData.append('token', SCAN_TOKEN);
-    formData.append('scannedBy', 'QR Scanner');
-
-    // إرسال طلب POST بوضع no-cors لتجاوز القيود والحظر تماماً
-    await fetch(WEB_APP_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData
-    });
-
-    // عند استخدام no-cors لا يتم قراءة نص الرد ولكن يصل الطلب بنجاح للسكربت ويسجل بالشيت
-    console.log("تم إرسال الكود للسيرفر بنجاح:", studentId);
-    showSuccessMessage("تم تسجيل الحضور بنجاح");
-
-  } catch (error) {
-    console.error("خطأ أثناء الإرسال:", error);
-    showErrorMessage("تعذر الإرسال للسيرفر");
-  }
+  sendViaIframe(
+    src,
+    (data)=>{
+      if(data.status==="success"){
+        beep("success");vibrate([100,60,100]);
+        show("✅ تم تسجيل الحضور<br><b>"+esc(data.studentName||id)+"</b><br><small>"+esc(id)+"</small>","success");
+      }else{
+        const msg=data.message||"حدث خطأ في التسجيل";
+        if(msg.includes("بالفعل")){
+          beep("warn");vibrate(250);
+          show("⚠️ الطالب مسجل بالفعل<br>"+esc(msg),"warn");
+        }else{
+          beep("error");vibrate(400);
+          show("❌ "+esc(msg),"error");
+        }
+      }
+      setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
+    },
+    ()=>{
+      beep("error");vibrate(400);
+      show("❌ انتهت المهلة من غير رد من السيرفر<br><small>جرب زرار 'اختبار الاتصال'، أو تأكد من الإنترنت</small>","error");
+      processing=false;
+    },
+    10000
+  );
 }
 
 function onScanSuccess(text){
-  const id=String(text||"").trim(); if(!id||processing)return;
-  const now=Date.now(); if(id===lastId&&now-lastTime<5000)return;
-  lastId=id;lastTime=now;processing=true;
-  show("🔎 تم العثور على QR<br><b>"+esc(id)+"</b><br><small>جاري التسجيل...</small>","");
-  sendScan(id);
+  const id=String(text||"").trim(); if(!id||processing)return;
+  const now=Date.now(); if(id===lastId&&now-lastTime<5000)return;
+  lastId=id;lastTime=now;processing=true;
+  show("🔎 تم العثور على QR<br><b>"+esc(id)+"</b><br><small>جاري التسجيل...</small>","");
+  sendScan(id);
 }
 
 function onScanFailure(){}
