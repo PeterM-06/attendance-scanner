@@ -94,33 +94,65 @@ function sendScan(id){
   // إرسال studentId و barcode معاً لتغطية أي مسمى في Backend
   const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&callback="+cb;
 
+  /* =========================
+     خطة احتياطية:
+     لو طريقة الـ <script> فشلت أو اتعلّقت (زي حالة
+     حجب على مستوى المتصفح/الشبكة)، نجرب نبعت نفس
+     الطلب بـ fetch(no-cors)، وبعدين بصورة <img>
+     كمحاولة أخيرة. الطلب بيوصل ويسجل الحضور حتى لو
+     مش هنقدر نقرا رد التأكيد.
+  ========================= */
+
+  function fallbackSend(){
+    if(settled) return;
+    settled = true;
+    delete window[cb];
+
+    fetch(src, {method:"GET", mode:"no-cors"})
+      .then(()=>{
+        beep("warn");vibrate(200);
+        show("📤 اتبعت الطلب (بطريقة احتياطية)<br><b>"+esc(id)+"</b><br><small>اتأكد من تقرير المحاضرة إن الطالب اتسجل.</small>","warn");
+        setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
+      })
+      .catch(()=>{
+        const img = new Image();
+        let imgDone = false;
+        img.onload = img.onerror = function(){
+          if(imgDone) return;
+          imgDone = true;
+          beep("warn");vibrate(200);
+          show("📤 اتبعت الطلب (محاولة أخيرة)<br><b>"+esc(id)+"</b><br><small>اتأكد من تقرير المحاضرة إن الطالب اتسجل فعلاً.</small>","warn");
+          setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
+        };
+        img.src = src + "&_img=1";
+        setTimeout(()=>{
+          if(!imgDone){
+            imgDone = true;
+            beep("error");vibrate(400);
+            show("❌ فشل الاتصال نهائيًا بكل الطرق<br><small>جرب نافذة متخفية، أو اقفل أي أداة حجب إعلانات، أو شبكة نت تانية</small>","error");
+            processing=false;
+          }
+        },5000);
+      });
+  }
+
   const s=document.createElement("script");
   s.id=cb;
   s.src=src;
 
   s.onerror=function(){
-    if(!settled){
-      settled=true;
-      delete window[cb];
-      if(s.parentNode) s.remove();
-      beep("error");vibrate(400);
-      show("❌ تعذر الوصول لـ Google Script<br><small>تأكد من الـ Deployment وتوصيل الإنترنت</small>","error");
-      processing=false;
-    }
+    if(s.parentNode) s.remove();
+    fallbackSend();
   };
 
   document.body.appendChild(s);
 
   setTimeout(()=>{
     if(!settled){
-      settled=true;
-      delete window[cb];
       if(s.parentNode) s.remove();
-      beep("error");vibrate(400);
-      show("❌ انتهت المهلة بدون رد من السيرفر","error");
-      processing=false;
+      fallbackSend();
     }
-  },10000);
+  },8000);
 }
 
 function onScanSuccess(text){
