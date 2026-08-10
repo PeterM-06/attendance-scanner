@@ -47,112 +47,89 @@ function vibrate(ms){if(navigator.vibrate) navigator.vibrate(ms);}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
 function show(t,c){const b=document.getElementById("result");b.className=c||"";b.innerHTML=t;}
 
-async function testConnection(){
-  const diag = document.getElementById("diag");
-  diag.textContent = "⏳ جاري الاختبار...";
-  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN) + "&callback=diagCb";
-  
-  window.diagCb = function(res) {
-    diag.textContent = "✅ الاتصال يعمل بنجاح! السيرفر رد بـ:\n" + JSON.stringify(res, null, 2);
-    delete window.diagCb;
-  };
+/* =========================
+   إرسال أي طلب عن طريق iframe مخفي.
+   الرد بيوصلنا عن طريق postMessage بدل ما نعتمد
+   على <script src> اللي كروم بقى يحجب قراءة رده
+   (Opaque Response Blocking) حتى لو اتنفذ صح
+   على السيرفر فعليًا.
+========================= */
 
-  const s = document.createElement("script");
-  s.src = testUrl;
-  s.onerror = function() {
-    diag.textContent = "❌ فشل الاتصال بالسيرفر! تأكد من رابط الـ Web App والتأكد من عمل Deploy كـ Anyone.";
-  };
-  document.body.appendChild(s);
-}
+function sendViaIframe(url, onResult, onTimeout, timeoutMs){
+  let settled = false;
 
-function sendScan(id){
-  const cb="cb_"+Date.now();
-  let settled=false;
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.src = url;
 
-  window[cb]=function(data){
-    settled=true;
-    delete window[cb];
-    const scriptEl = document.getElementById(cb);
-    if(scriptEl) scriptEl.remove();
-
-    if(data.status==="success" || data.success === true){
-      beep("success");vibrate([100,60,100]);
-      show("✅ تم تسجيل الحضور<br><b>"+esc(data.studentName||id)+"</b><br><small>"+esc(id)+"</small>","success");
-    }else{
-      const msg=data.message||"حدث خطأ في التسجيل";
-      if(msg.includes("بالفعل")){
-        beep("warn");vibrate(250);
-        show("⚠️ الطالب مسجل بالفعل<br>"+esc(msg),"warn");
-      }else{
-        beep("error");vibrate(400);
-        show("❌ "+esc(msg),"error");
-      }
-    }
-    setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
-  };
-
-  // إرسال studentId و barcode معاً لتغطية أي مسمى في Backend
-  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&callback="+cb;
-
-  /* =========================
-     خطة احتياطية:
-     لو طريقة الـ <script> فشلت أو اتعلّقت (زي حالة
-     حجب على مستوى المتصفح/الشبكة)، نجرب نبعت نفس
-     الطلب بـ fetch(no-cors)، وبعدين بصورة <img>
-     كمحاولة أخيرة. الطلب بيوصل ويسجل الحضور حتى لو
-     مش هنقدر نقرا رد التأكيد.
-  ========================= */
-
-  function fallbackSend(){
+  function handler(event){
     if(settled) return;
+    const d = event.data;
+    if(!d || typeof d !== "object" || !("status" in d)) return;
     settled = true;
-    delete window[cb];
-
-    fetch(src, {method:"GET", mode:"no-cors"})
-      .then(()=>{
-        beep("warn");vibrate(200);
-        show("📤 اتبعت الطلب (بطريقة احتياطية)<br><b>"+esc(id)+"</b><br><small>اتأكد من تقرير المحاضرة إن الطالب اتسجل.</small>","warn");
-        setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
-      })
-      .catch(()=>{
-        const img = new Image();
-        let imgDone = false;
-        img.onload = img.onerror = function(){
-          if(imgDone) return;
-          imgDone = true;
-          beep("warn");vibrate(200);
-          show("📤 اتبعت الطلب (محاولة أخيرة)<br><b>"+esc(id)+"</b><br><small>اتأكد من تقرير المحاضرة إن الطالب اتسجل فعلاً.</small>","warn");
-          setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
-        };
-        img.src = src + "&_img=1";
-        setTimeout(()=>{
-          if(!imgDone){
-            imgDone = true;
-            beep("error");vibrate(400);
-            show("❌ فشل الاتصال نهائيًا بكل الطرق<br><small>جرب نافذة متخفية، أو اقفل أي أداة حجب إعلانات، أو شبكة نت تانية</small>","error");
-            processing=false;
-          }
-        },5000);
-      });
+    window.removeEventListener("message", handler);
+    if(iframe.parentNode) iframe.remove();
+    onResult(d);
   }
 
-  const s=document.createElement("script");
-  s.id=cb;
-  s.src=src;
-
-  s.onerror=function(){
-    if(s.parentNode) s.remove();
-    fallbackSend();
-  };
-
-  document.body.appendChild(s);
+  window.addEventListener("message", handler);
+  document.body.appendChild(iframe);
 
   setTimeout(()=>{
     if(!settled){
-      if(s.parentNode) s.remove();
-      fallbackSend();
+      settled = true;
+      window.removeEventListener("message", handler);
+      if(iframe.parentNode) iframe.remove();
+      onTimeout();
     }
-  },8000);
+  }, timeoutMs || 10000);
+}
+
+async function testConnection(){
+  const diag = document.getElementById("diag");
+  diag.textContent = "⏳ جاري الاختبار...";
+  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN);
+
+  sendViaIframe(
+    testUrl,
+    (res)=>{
+      diag.textContent = "✅ الاتصال يعمل بنجاح! السيرفر رد بـ:\n" + JSON.stringify(res, null, 2);
+    },
+    ()=>{
+      diag.textContent = "❌ لسه مفيش رد بعد 10 ثواني. تأكد من رابط الـ Web App، ومن عمل Deploy جديد بعد آخر تعديل.";
+    },
+    10000
+  );
+}
+
+function sendScan(id){
+  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN);
+
+  sendViaIframe(
+    src,
+    (data)=>{
+      if(data.status==="success"){
+        beep("success");vibrate([100,60,100]);
+        show("✅ تم تسجيل الحضور<br><b>"+esc(data.studentName||id)+"</b><br><small>"+esc(id)+"</small>","success");
+      }else{
+        const msg=data.message||"حدث خطأ في التسجيل";
+        if(msg.includes("بالفعل")){
+          beep("warn");vibrate(250);
+          show("⚠️ الطالب مسجل بالفعل<br>"+esc(msg),"warn");
+        }else{
+          beep("error");vibrate(400);
+          show("❌ "+esc(msg),"error");
+        }
+      }
+      setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
+    },
+    ()=>{
+      beep("error");vibrate(400);
+      show("❌ انتهت المهلة من غير رد من السيرفر<br><small>جرب زرار 'اختبار الاتصال'، أو تأكد من الإنترنت</small>","error");
+      processing=false;
+    },
+    10000
+  );
 }
 
 function onScanSuccess(text){
