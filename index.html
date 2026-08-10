@@ -64,8 +64,11 @@ function sendViaIframe(url, onResult, onTimeout, timeoutMs){
 
   function handler(event){
     if(settled) return;
+
+    // تجاهل أي postMessage لا يخص طلبنا.
     const d = event.data;
     if(!d || typeof d !== "object" || !("status" in d)) return;
+
     settled = true;
     window.removeEventListener("message", handler);
     if(iframe.parentNode) iframe.remove();
@@ -88,7 +91,7 @@ function sendViaIframe(url, onResult, onTimeout, timeoutMs){
 async function testConnection(){
   const diag = document.getElementById("diag");
   diag.textContent = "⏳ جاري الاختبار...";
-  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN);
+  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN) + "&_=" + Date.now();
 
   sendViaIframe(
     testUrl,
@@ -103,7 +106,7 @@ async function testConnection(){
 }
 
 function sendScan(id){
-  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN);
+  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&_="+Date.now();
 
   sendViaIframe(
     src,
