@@ -128,7 +128,7 @@ body{
 <script>
 const WEB_APP_URL="https://script.google.com/macros/s/AKfycbzWl3_NR3RM8avD_mstOOiLin4vCehKMQ_hxPbDluaSr11hk54XMUzLo4237kphs5GatA/exec";
 const SCAN_TOKEN="JAWALA-2026-CHANGE-ME-7f3a9";
-const SCAN_TIMEOUT_MS=12000;
+const SCAN_TIMEOUT_MS=20000; // زودناها من 12 إلى 20 ثانية: أول مسح في أي جلسة بيبني الكاش على السيرفر فبياخد وقت أطول شوية من باقي المسحات
 const MAX_LOG=6;
 
 let processing=false,lastId="",lastTime=0;
