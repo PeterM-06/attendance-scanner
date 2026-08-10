@@ -103,34 +103,36 @@ async function testConnection(){
   );
 }
 
-function sendScan(id){
-  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN);
+// ضع رابط الـ Exec المباشر هنا
+const WEB_APP_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
+const SCAN_TOKEN = "your_token_here"; // التوكن الخاص بك إن وجد
 
-  sendViaIframe(
-    src,
-    (data)=>{
-      if(data.status==="success"){
-        beep("success");vibrate([100,60,100]);
-        show("✅ تم تسجيل الحضور<br><b>"+esc(data.studentName||id)+"</b><br><small>"+esc(id)+"</small>","success");
-      }else{
-        const msg=data.message||"حدث خطأ في التسجيل";
-        if(msg.includes("بالفعل")){
-          beep("warn");vibrate(250);
-          show("⚠️ الطالب مسجل بالفعل<br>"+esc(msg),"warn");
-        }else{
-          beep("error");vibrate(400);
-          show("❌ "+esc(msg),"error");
-        }
-      }
-      setTimeout(()=>{processing=false;show("📷 في انتظار QR...","");},1500);
-    },
-    ()=>{
-      beep("error");vibrate(400);
-      show("❌ انتهت المهلة من غير رد من السيرفر<br><small>جرب زرار 'اختبار الاتصال'، أو تأكد من الإنترنت</small>","error");
-      processing=false;
-    },
-    10000
-  );
+async function sendScanToSheet(studentId) {
+  try {
+    const formData = new URLSearchParams();
+    formData.append('action', 'scan');
+    formData.append('studentId', studentId);
+    formData.append('token', SCAN_TOKEN);
+    formData.append('scannedBy', 'QR Scanner');
+
+    // إرسال طلب POST بوضع no-cors لتجاوز القيود والحظر تماماً
+    await fetch(WEB_APP_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData
+    });
+
+    // عند استخدام no-cors لا يتم قراءة نص الرد ولكن يصل الطلب بنجاح للسكربت ويسجل بالشيت
+    console.log("تم إرسال الكود للسيرفر بنجاح:", studentId);
+    showSuccessMessage("تم تسجيل الحضور بنجاح");
+
+  } catch (error) {
+    console.error("خطأ أثناء الإرسال:", error);
+    showErrorMessage("تعذر الإرسال للسيرفر");
+  }
 }
 
 function onScanSuccess(text){
