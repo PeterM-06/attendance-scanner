@@ -142,7 +142,23 @@ function onScanSuccess(text){
 
 function onScanFailure(){}
 
-new Html5QrcodeScanner("reader",{fps:10,qrbox:{width:250,height:250},rememberLastUsedCamera:true,supportedScanTypes:[Html5QrcodeScanType.SCAN_TYPE_CAMERA]},false).render(onScanSuccess,onScanFailure);
-</script>
+const html5QrcodeScanner = new Html5QrcodeScanner(
+  "reader", 
+  { 
+    fps: 15, 
+    qrbox: function(viewfinderWidth, viewfinderHeight) {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      return {
+        width: Math.floor(minEdge * 0.7),
+        height: Math.floor(minEdge * 0.7)
+      };
+    },
+    rememberLastUsedCamera: true,
+    aspectRatio: 1.0
+  }, 
+  /* verbose= */ false
+);
+
+html5QrcodeScanner.render(onScanSuccess, onScanFailure);</script>
 </body>
 </html>
