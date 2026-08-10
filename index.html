@@ -30,7 +30,7 @@ button{padding:10px 18px;border:0;border-radius:8px;margin:8px;background:#2563e
 </div>
 </div>
 <script>
-const WEB_APP_URL="https://script.google.com/macros/s/AKfycbz7-wcQxaN53N-NQcvS6NYgDBU2oOOFJuLN73V9XlsQsa6SO-ROM6-qllnltHgzXGJfjQ/exec";
+const WEB_APP_URL="https://script.google.com/macros/s/AKfycbxchjrSC4Wl5-Q1noYdEdXr3L0yPS0HkD56mSo-i2aW5YOHWk-mxT3aZdJYcs_Uf_zRGA/exec";
 const SCAN_TOKEN="JAWALA-2026-CHANGE-ME-7f3a9";
 let processing=false,lastId="",lastTime=0;
 
@@ -64,11 +64,8 @@ function sendViaIframe(url, onResult, onTimeout, timeoutMs){
 
   function handler(event){
     if(settled) return;
-
-    // تجاهل أي postMessage لا يخص طلبنا.
     const d = event.data;
     if(!d || typeof d !== "object" || !("status" in d)) return;
-
     settled = true;
     window.removeEventListener("message", handler);
     if(iframe.parentNode) iframe.remove();
@@ -91,7 +88,7 @@ function sendViaIframe(url, onResult, onTimeout, timeoutMs){
 async function testConnection(){
   const diag = document.getElementById("diag");
   diag.textContent = "⏳ جاري الاختبار...";
-  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN) + "&_=" + Date.now();
+  const testUrl = WEB_APP_URL + "?action=scan&studentId=DIAG_TEST&barcode=DIAG_TEST&scannedBy=DiagTool&token=" + encodeURIComponent(SCAN_TOKEN);
 
   sendViaIframe(
     testUrl,
@@ -106,7 +103,7 @@ async function testConnection(){
 }
 
 function sendScan(id){
-  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN)+"&_="+Date.now();
+  const src = WEB_APP_URL+"?action=scan&studentId="+encodeURIComponent(id)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&token="+encodeURIComponent(SCAN_TOKEN);
 
   sendViaIframe(
     src,
