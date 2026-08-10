@@ -190,8 +190,9 @@ function sendScan(id){
     if(data.status==="success"){
       beep("success");vibrate([100,60,100]);
       const name=data.studentName||id;
-      show("✅ تم تسجيل الحضور<br><b>"+esc(name)+"</b><br><small>"+esc(id)+"</small>","success");
-      addLog("success",name,id);
+      const idLine=data.studentId?("<br><small>"+esc(data.studentId)+"</small>"):"";
+      show("✅ تم تسجيل الحضور<br><b>"+esc(name)+"</b>"+idLine,"success");
+      addLog("success",name,data.studentId||"");
     }else{
       const msg=data.message||"حدث خطأ غير معروف";
       if(msg.includes("بالفعل")){
