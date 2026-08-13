@@ -126,7 +126,291 @@ body{
 </div>
 
 <script>
-const WEB_APP_URL="https://script.google.com/macros/s/AKfycbzjeHG7mJAGYJk5Ez0agiRYuAyArCQ-t_b6fz9UW-N5nzIL-u5-NqZf13jVTrhEQxhYxA/exec";
+const WEB_APP_URL="<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ماسح الحضور</title>
+<style>
+* { box-sizing: border-box; }
+
+:root{
+  --bg:#0d1912;
+  --bg-soft:#122117;
+  --card:#17301f;
+  --card-soft:#1c3823;
+  --border:#2b4d36;
+  --text:#f3f6f1;
+  --muted:#9fb7a4;
+  --accent:#2f9e5c;
+  --accent-hover:#268049;
+  --gold:#d9a441;
+}
+
+body{
+  margin:0;
+  padding:20px;
+  background:var(--bg);
+  background-image:radial-gradient(circle at 15% 0%, var(--bg-soft) 0%, var(--bg) 55%);
+  color:var(--text);
+  font-family:Tahoma,'Segoe UI',Arial,sans-serif;
+  direction:rtl;
+  min-height:100vh;
+}
+
+.container{
+  max-width:560px;
+  margin:auto;
+}
+
+.header{
+  text-align:center;
+  margin-bottom:24px;
+}
+
+.header .emblem{
+  font-size:34px;
+  display:block;
+  margin-bottom:6px;
+}
+
+.header h1{
+  font-size:26px;
+  margin:0 0 8px;
+}
+
+.header p{
+  color:var(--muted);
+  font-size:15px;
+  margin:0;
+}
+
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+  box-shadow:0 8px 22px rgba(0,0,0,.35);
+}
+
+.scan-frame{
+  border-radius:12px;
+  overflow:hidden;
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+}
+#reader{width:100%}
+
+#result{
+  margin-top:16px;
+  padding:16px;
+  border-radius:12px;
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  min-height:56px;
+  font-size:17px;
+  text-align:center;
+  transition:background .15s ease,border-color .15s ease;
+}
+#result b{display:block;margin-top:4px;font-size:19px}
+#result small{color:var(--muted);font-size:13px}
+
+.success{background:#0f3324!important;border-color:#2f9e5c!important;color:#6ee7b7}
+.error{background:#3a1414!important;border-color:#dc2626!important;color:#fca5a5}
+.warn{background:#3a2f14!important;border-color:var(--gold)!important;color:#fcd34d}
+
+.info{
+  color:var(--muted);
+  font-size:14px;
+  text-align:center;
+  margin-top:14px;
+}
+
+.log{
+  margin-top:16px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.log-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-right:4px solid var(--accent);
+  border-radius:10px;
+  padding:10px 14px;
+  font-size:13.5px;
+}
+.log-item.success{border-right-color:#2f9e5c}
+.log-item.warn{border-right-color:var(--gold)}
+.log-item.error{border-right-color:#dc2626}
+.log-item .name{color:var(--text)}
+.log-item .time{color:#64748b;font-size:12px}
+
+.footer{
+  text-align:center;
+  margin-top:26px;
+  color:var(--muted);
+  font-size:12.5px;
+}
+</style>
+<script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+<span class="emblem">⚜️</span>
+<h1>ماسح الحضور</h1>
+<p>جوالة — تسجيل حضور الاجتماع بالـ QR</p>
+</div>
+
+<div class="card">
+<div class="scan-frame">
+<div id="reader"></div>
+</div>
+<div id="result">📷 في انتظار QR...</div>
+</div>
+
+<p class="info">امسح أكواد الجوّالة واحدًا وراء الآخر</p>
+
+<div id="log" class="log"></div>
+
+<div class="footer">نظام إدارة حضور عشيرة الجوالة</div>
+
+</div>
+
+<script>
+const WEB_APP_URL="https://script.google.com/macros/s/AKfycbzywPBAgv5tyn7llVzHqrkGlIuhHeY8aPNxzFV0hFgZ9v9JV0hCLJck7MTTshHF5U3_kQ/exec";
+const SCAN_TOKEN="JAWALA-2026-CHANGE-ME-7f3a9";
+const SCAN_TIMEOUT_MS=20000; // زودناها من 12 إلى 20 ثانية: أول مسح في أي اجتماع بيبني الكاش على السيرفر فبياخد وقت أطول شوية من باقي المسحات
+const MAX_LOG=6;
+
+let processing=false,lastId="",lastTime=0;
+
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+
+function beep(type){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    const ctx=new C(),o=ctx.createOscillator(),g=ctx.createGain();
+    o.frequency.value=type==="success"?880:type==="warn"?440:220;
+    o.connect(g);g.connect(ctx.destination);g.gain.value=.08;
+    o.start();o.stop(ctx.currentTime+(type==="success"?.12:.22));
+  }catch(e){}
+}
+function vibrate(ms){if(navigator.vibrate) navigator.vibrate(ms);}
+function show(t,c){const b=document.getElementById("result");b.className=c||"";b.innerHTML=t;}
+
+function addLog(state,name,sub){
+  const log=document.getElementById("log");
+  const item=document.createElement("div");
+  item.className="log-item "+state;
+  const time=new Date().toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"});
+  item.innerHTML="<span class=\"name\">"+esc(name)+(sub?" — "+esc(sub):"")+"</span><span class=\"time\">"+time+"</span>";
+  log.insertBefore(item,log.firstChild);
+  while(log.children.length>MAX_LOG) log.removeChild(log.lastChild);
+}
+
+function resetToIdle(){
+  processing=false;
+  show("📷 في انتظار QR...","");
+}
+
+function sendScan(id){
+  const cb="cb_"+Date.now()+"_"+Math.floor(Math.random()*1000);
+  let settled=false;
+
+  const timeoutId=setTimeout(function(){
+    if(settled)return;
+    settled=true;
+    beep("error");vibrate(400);
+    show("⏱️ لا يوجد رد من السيرفر<br><small>تأكد من الاتصال بالإنترنت وحاول تاني</small>","error");
+    addLog("error",id,"لا يوجد رد (Timeout)");
+    cleanup();
+    setTimeout(resetToIdle,1500);
+  },SCAN_TIMEOUT_MS);
+
+  function cleanup(){
+    delete window[cb];
+    const s=document.getElementById(cb);
+    if(s) s.remove();
+  }
+
+  window[cb]=function(data){
+    if(settled)return;
+    settled=true;
+    clearTimeout(timeoutId);
+
+    if(data.status==="success"){
+      beep("success");vibrate([100,60,100]);
+      const name=data.studentName||id;
+      const idLine=data.studentId?("<br><small>"+esc(data.studentId)+"</small>"):"";
+      show("✅ تم تسجيل الحضور<br><b>"+esc(name)+"</b>"+idLine,"success");
+      addLog("success",name,data.studentId||"");
+    }else{
+      const msg=data.message||"حدث خطأ غير معروف";
+      if(msg.includes("بالفعل")){
+        beep("warn");vibrate(250);
+        show("⚠️ الجوّال مسجل بالفعل<br>"+esc(msg),"warn");
+        addLog("warn",data.studentName||id,msg);
+      }else{
+        beep("error");vibrate(400);
+        show("❌ "+esc(msg),"error");
+        addLog("error",data.studentName||id,msg);
+      }
+    }
+    cleanup();
+    setTimeout(resetToIdle,1400);
+  };
+
+  const s=document.createElement("script");
+  s.id=cb;
+  s.src=WEB_APP_URL+"?action=scan&token="+encodeURIComponent(SCAN_TOKEN)+"&barcode="+encodeURIComponent(id)+"&scannedBy="+encodeURIComponent("QR Scanner")+"&callback="+cb;
+  s.onerror=function(){
+    if(settled)return;
+    settled=true;
+    clearTimeout(timeoutId);
+    beep("error");vibrate(400);
+    show("❌ فشل الاتصال بنظام الحضور<br><small>تأكد إن رابط السيرفر صحيح ومتاح</small>","error");
+    addLog("error",id,"فشل الاتصال بالسيرفر");
+    cleanup();
+    setTimeout(resetToIdle,1500);
+  };
+  document.body.appendChild(s);
+}
+
+function onScanSuccess(text){
+  const id=String(text||"").trim();
+  if(!id||processing)return;
+  const now=Date.now();
+  if(id===lastId&&now-lastTime<5000)return;
+  lastId=id;lastTime=now;processing=true;
+  show("🔎 تم العثور على QR<br><b>"+esc(id)+"</b><br><small>جاري التسجيل...</small>","");
+  sendScan(id);
+}
+function onScanFailure(){}
+
+window.addEventListener("error",function(ev){
+  show("❌ حدث خطأ غير متوقع في الصفحة<br><small>"+esc(String(ev.message||""))+"</small>","error");
+});
+
+try{
+  new Html5QrcodeScanner(
+    "reader",
+    {fps:10,qrbox:{width:250,height:250},rememberLastUsedCamera:true,supportedScanTypes:[Html5QrcodeScanType.SCAN_TYPE_CAMERA]},
+    false
+  ).render(onScanSuccess,onScanFailure);
+}catch(e){
+  show("❌ تعذّر تشغيل الكاميرا<br><small>"+esc(String(e.message||e))+"</small>","error");
+}
+</script>
+</body>
+</html>";
 const SCAN_TOKEN="JAWALA-2026-CHANGE-ME-7f3a9";
 const SCAN_TIMEOUT_MS=20000; // زودناها من 12 إلى 20 ثانية: أول مسح في أي جلسة بيبني الكاش على السيرفر فبياخد وقت أطول شوية من باقي المسحات
 const MAX_LOG=6;
